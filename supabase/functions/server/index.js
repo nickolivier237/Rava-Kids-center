@@ -11,6 +11,11 @@ import crypto from "crypto";
 dotenv.config();
 const app = new Hono();
 
+// 2. Middlewares (PLACS EN PREMIER)
+// On autorise tout (*) pour garantir que le mobile ne soit pas bloqué par le CORS
+app.use("*", cors()); 
+app.use("*", logger());
+
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
@@ -22,24 +27,13 @@ console.log("----------------------------------");
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   console.error("❌ ERREUR: Variables d'environnement manquantes dans le fichier .env");
-  // Sur Render, on ne coupe pas forcément le process pour permettre de corriger les variables via l'interface
 }
 
-// 2. Client Supabase
+// 3. Client Supabase
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
   global: { fetch: (...args) => fetch(...args) },
 });
-
-// 3. Middlewares
-app.use("*", logger());
-app.use("/*", cors({
-  origin: "*", // 💡 On pourra restreindre à l'URL Vercel plus tard pour la sécurité
-  allowHeaders: ["Content-Type", "Authorization"],
-  allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  exposeHeaders: ["Content-Length"],
-  maxAge: 600,
-}));
 
 // 4. Initialisation du Storage
 const BUCKET_NAME = "make-35cfb8b9-product-images";
@@ -78,7 +72,9 @@ async function verifyAdmin(c) {
   }
 }
 
-// ========== ROUTES ADMIN ==========
+// ========== ROUTES ==========
+app.get("/", (c) => c.text("Backend Rava Kids is Running! 🚀"));
+
 app.get("/admin/check", async (c) => {
   const adminId = await kv.get("admin_user");
   return c.json({ exists: !!adminId });
@@ -113,12 +109,15 @@ app.post("/admin/login", async (c) => {
   }
 });
 
-// ========== ROUTES PRODUITS ==========
 app.get("/products", async (c) => {
-  const rows = await kv.getByPrefix("product:");
-  const products = rows.map(r => r.value);
-  const sorted = products.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  return c.json({ products: sorted });
+  try {
+    const rows = await kv.getByPrefix("product:");
+    const products = rows.map(r => r.value);
+    const sorted = products.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    return c.json({ products: sorted });
+  } catch (error) {
+    return c.json({ error: "Failed to fetch products", products: [] }, 500);
+  }
 });
 
 app.post("/products", async (c) => {
@@ -156,7 +155,6 @@ app.delete("/products/:id", async (c) => {
   return c.json({ success: true });
 });
 
-// ========== ROUTE UPLOAD IMAGE ==========
 app.post("/upload-image", async (c) => {
   const user = await verifyAdmin(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
@@ -188,15 +186,13 @@ app.post("/upload-image", async (c) => {
   }
 });
 
-// ========== DÉMARRAGE DU SERVEUR (ADAPTÉ POUR RENDER) ==========
-
-// Render fournit automatiquement la variable PORT
+// ========== DÉMARRAGE DU SERVEUR ==========
 const port = Number(process.env.PORT) || 3000;
 
 serve({
   fetch: app.fetch,
   port: port,
-  hostname: '0.0.0.0' // Obligatoire sur Render pour l'accès externe
+  hostname: '0.0.0.0'
 }, (info) => {
   console.log(`🚀 Serveur actif sur le port ${info.port}`);
 });
