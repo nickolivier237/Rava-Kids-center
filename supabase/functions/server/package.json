@@ -1,0 +1,23 @@
+{
+  "name": "rava-kids-server",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Node.js backend server for Rava Kids Center",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon index.js",
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.9",
+    "@supabase/supabase-js": "^2.49.8",
+    "dotenv": "^16.4.5",
+    "hono": "^4.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
