@@ -22,7 +22,7 @@ console.log("----------------------------------");
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   console.error("❌ ERREUR: Variables d'environnement manquantes dans le fichier .env");
-  process.exit(1);
+  // Sur Render, on ne coupe pas forcément le process pour permettre de corriger les variables via l'interface
 }
 
 // 2. Client Supabase
@@ -34,7 +34,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 // 3. Middlewares
 app.use("*", logger());
 app.use("/*", cors({
-  origin: "*",
+  origin: "*", // 💡 On pourra restreindre à l'URL Vercel plus tard pour la sécurité
   allowHeaders: ["Content-Type", "Authorization"],
   allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   exposeHeaders: ["Content-Length"],
@@ -62,22 +62,6 @@ async function initializeBucket() {
   }
 }
 initializeBucket();
-
-// 5. Seed default products into KV
-// async function seedDefaults() {
-//   try {
-//     const keys = defaultProducts.map(p => `product:${p.id}`);
-//     const values = defaultProducts.map(p => ({
-//       ...p,
-//       createdAt: new Date().toISOString(),
-//     }));
-//     await kv.mset(keys, values);
-//     console.log("✅ Default products seeded into KV");
-//   } catch (e) {
-//     console.error("❌ Error seeding defaults:", e.message);
-//   }
-// }
-// seedDefaults();
 
 // Helper: Vérification Admin
 async function verifyAdmin(c) {
@@ -132,7 +116,7 @@ app.post("/admin/login", async (c) => {
 // ========== ROUTES PRODUITS ==========
 app.get("/products", async (c) => {
   const rows = await kv.getByPrefix("product:");
-  const products = rows.map(r => r.value); // ✅ unwrap value
+  const products = rows.map(r => r.value);
   const sorted = products.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   return c.json({ products: sorted });
 });
@@ -142,7 +126,7 @@ app.post("/products", async (c) => {
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
   const productData = await c.req.json();
-  const id = crypto.randomUUID(); // ✅ always unique
+  const id = crypto.randomUUID();
   const product = { ...productData, id, createdAt: new Date().toISOString() };
 
   await kv.set(`product:${id}`, product);
@@ -186,8 +170,6 @@ app.post("/upload-image", async (c) => {
     const buffer = Buffer.from(arrayBuffer);
     const fileName = `${Date.now()}-${file.name || "upload.jpg"}`;
 
-    console.log(`🚀 Tentative d'upload: ${fileName} (${buffer.length} bytes)`);
-
     const { data, error } = await supabase.storage
       .from(BUCKET_NAME)
       .upload(fileName, buffer, {
@@ -197,25 +179,28 @@ app.post("/upload-image", async (c) => {
         metadata: { owner: user.id }
       });
 
-    if (error) {
-      console.error("❌ Erreur Supabase Storage:", error.message);
-      return c.json({ error: error.message }, 500);
-    }
+    if (error) return c.json({ error: error.message }, 500);
 
     const { data: publicData } = supabase.storage.from(BUCKET_NAME).getPublicUrl(data.path);
-    console.log("✅ Image uploadée avec succès:", publicData.publicUrl);
-
     return c.json({ url: publicData.publicUrl });
   } catch (e) {
-    console.error("❌ Erreur Serveur Upload:", e.message);
     return c.json({ error: "Erreur interne lors de l'upload" }, 500);
   }
 });
 
-// Démarrage du serveur
-const port = 3000;
-serve({ fetch: app.fetch, port });
-console.log(`🚀 Serveur actif sur http://localhost:${port}`);
+// ========== DÉMARRAGE DU SERVEUR (ADAPTÉ POUR RENDER) ==========
+
+// Render fournit automatiquement la variable PORT
+const port = Number(process.env.PORT) || 3000;
+
+serve({
+  fetch: app.fetch,
+  port: port,
+  hostname: '0.0.0.0' // Obligatoire sur Render pour l'accès externe
+}, (info) => {
+  console.log(`🚀 Serveur actif sur le port ${info.port}`);
+});
+
 
 
 
