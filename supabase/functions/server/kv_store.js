@@ -1,11 +1,18 @@
+import 'dotenv/config'; // Charge les variables d'environnement immédiatement
 import { createClient } from "@supabase/supabase-js";
-import dotenv from "dotenv";
 
-dotenv.config();
+// Récupération des variables d'environnement
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+// Sécurité : Vérifier la présence des variables obligatoires
+if (!supabaseUrl || !supabaseKey) {
+  console.error("ERREUR CRITIQUE : SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY est manquante dans l'environnement !");
+}
 
 const supabase = createClient(
-  process.env.SUPABASE_URL || "",
-  process.env.SUPABASE_SERVICE_ROLE_KEY || "",
+  supabaseUrl || "",
+  supabaseKey || "",
   {
     global: {
       fetch: (...args) => fetch(...args),
